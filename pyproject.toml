@@ -22,7 +22,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-keywords = ["adk", "google-adk", "s3", "amazon-s3", "artifact-storage", "session-service", "redis", "mongo"]
+keywords = ["adk", "google-adk", "s3", "amazon-s3", "artifact-storage", "session-service", "redis", "mongo", "supabase"]
 dependencies = [
     "google-adk",
     "google-generativeai>=0.8.5",
@@ -31,6 +31,7 @@ dependencies = [
     "motor>=3.3.0",
     "redis>=5.0.0",
     "azure-storage-blob>=12.20.0",
+    "supabase>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
 

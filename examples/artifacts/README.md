@@ -11,12 +11,14 @@ graph TD
     A --> C[GcsArtifactService]
     A --> D[S3ArtifactService]
     A --> E[LocalFolderArtifactService]
+    A --> F[SupabaseArtifactService]
     
     style A fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
     style B fill:#f5f5f5,stroke:#666,stroke-width:1px,color:#000000
     style C fill:#f5f5f5,stroke:#666,stroke-width:1px,color:#000000
     style D fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000
     style E fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000
+    style F fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000
 ```
 
 </div>
@@ -124,6 +126,108 @@ After MinIO is running and your bucket is created, you can run the example:
 ```bash
 python s3_artifact_example.py
 ```
+
+## SupabaseArtifactService
+
+**Storage Mechanism:** Leverages Supabase Storage for persistent artifact storage, similar to S3. Each version of an artifact is stored as a separate object within the specified bucket.
+
+**Object Naming Convention:** Constructs storage keys using a hierarchical path structure with a `public` prefix:
+```
+public/<app_name>/<user_id>/<session_id>/<filename>/<version>
+```
+
+### Key Features
+- **Persistence:** Artifacts are stored durably in Supabase Storage, surviving application restarts and deployments.
+- **Scalability:** Leverages the scalability and availability of Supabase's infrastructure built on top of cloud storage.
+- **Versioning:** Each save operation stores a new version as a distinct object, enabling retrieval of specific artifact versions.
+- **Free Tier:** Supabase offers a generous free tier, making it ideal for prototyping and smaller applications.
+- **Easy Integration:** Works seamlessly with Supabase projects—just provide your project URL and API key.
+- **Flexible Credentials:** Credentials can be provided explicitly or loaded from environment variables.
+
+### Permissions Required
+The Supabase storage bucket must have appropriate RLS (Row Level Security) policies configured. For basic usage with the `anon` key:
+1. Create a storage bucket (e.g., `artifacts`)
+2. Set up RLS policies to allow read/write access to objects with the `public/` prefix
+3. Ensure your service role or anon key has the necessary permissions
+
+### Use Cases
+- Production environments with Supabase infrastructure
+- Applications already using Supabase for other services (database, auth, etc.)
+- Projects that want to avoid AWS and prefer an all-in-one platform
+- Rapid prototyping with Supabase's free tier
+- Applications needing persistent artifact storage with straightforward setup
+
+### Instantiation
+
+```python
+from adk_extra_services.artifacts import SupabaseArtifactService
+
+# Option 1: Use environment variables (recommended)
+# Set SUPABASE_URL, SUPABASE_KEY, and optionally SUPABASE_BUCKET
+supabase_service = SupabaseArtifactService()
+print("SupabaseArtifactService initialized")
+
+# Option 2: Pass explicit credentials
+supabase_service = SupabaseArtifactService(
+    url="https://your-project.supabase.co",
+    key="your-anon-or-service-role-key",
+    bucket_name="artifacts"  # defaults to 'artifacts'
+)
+
+# Then pass it to the Runner
+runner = Runner(..., artifact_service=supabase_service)
+```
+
+### Example: Setting up Supabase Storage
+
+1. **Create a Supabase Project:**
+   - Go to [supabase.com](https://supabase.com) and create a new project
+   - Note your project URL and anon/service role key
+
+2. **Create Storage Bucket:**
+   - In the Supabase dashboard, go to Storage
+   - Create a new bucket called `artifacts` (or your preferred name)
+   - Make it public or configure RLS policies as needed
+
+3. **Configure RLS Policies (if using anon key):**
+   ```sql
+   -- Allow authenticated and anonymous users to upload/read/delete from public folder
+   CREATE POLICY "Allow public folder access"
+   ON storage.objects FOR ALL
+   USING (bucket_id = 'artifacts' AND (storage.foldername(name))[1] = 'public');
+   ```
+
+4. **Prepare your environment:**
+   - `cd` into the `examples/artifacts` directory:
+     ```bash
+     cd examples/artifacts
+     ```
+   - Copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Edit `.env` to add:
+     ```
+     SUPABASE_URL=https://your-project.supabase.co
+     SUPABASE_KEY=your-anon-or-service-key
+     SUPABASE_BUCKET=artifacts
+     ```
+
+5. **Install dependencies:**
+   ```bash
+   pip install supabase
+   ```
+
+6. **Run the example:**
+   ```bash
+   python supabase_artifact_example.py
+   ```
+
+If everything is configured correctly, you should see a `.csv` file created in your Supabase Storage bucket.
+
+---
+
+For a complete usage example, see [`supabase_artifact_example.py`](./supabase_artifact_example.py).
 
 ## LocalFolderArtifactService
 

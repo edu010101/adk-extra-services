@@ -23,6 +23,7 @@ from adk_extra_services.artifacts import (
     AzureBlobArtifactService,
     LocalFolderArtifactService,
     S3ArtifactService,
+    SupabaseArtifactService,
 )
 
 Enum = enum.Enum
@@ -32,6 +33,7 @@ class ArtifactServiceType(Enum):
     S3 = "S3"
     LOCAL = "LOCAL"
     AZURE = "AZURE"
+    SUPABASE = "SUPABASE"
 
 
 def mock_s3_artifact_service():
@@ -172,6 +174,69 @@ def mock_azure_artifact_service():
     return svc
 
 
+def mock_supabase_artifact_service():
+    """Mocks a Supabase Storage client for testing SupabaseArtifactService."""
+    
+    class MockStorageBucket:
+        
+        def __init__(self):
+            self.store = {}
+            self.metadata = {}
+        
+        def upload(self, path, data, file_options=None):
+            if path in self.store:
+                raise Exception(f"File already exists: {path}")
+            content_type = file_options.get("content-type", "application/octet-stream") if file_options else "application/octet-stream"
+            self.store[path] = data
+            self.metadata[path] = content_type
+        
+        def update(self, path, data, file_options=None):
+            content_type = file_options.get("content-type", "application/octet-stream") if file_options else "application/octet-stream"
+            self.store[path] = data
+            self.metadata[path] = content_type
+        
+        def download(self, path):
+            if path not in self.store:
+                raise Exception(f"File not found: {path}")
+            return self.store[path]
+        
+        def remove(self, paths):
+            for path in paths:
+                self.store.pop(path, None)
+                self.metadata.pop(path, None)
+        
+        def list(self, prefix):
+            matching = []
+            for key in self.store.keys():
+                if key.startswith(prefix):
+                    metadata = {"mimetype": self.metadata.get(key, "application/octet-stream")}
+                    matching.append({"name": key, "metadata": metadata})
+            return matching
+    
+    class MockStorage:
+        
+        def __init__(self):
+            self.buckets = {}
+        
+        def from_(self, bucket_name):
+            if bucket_name not in self.buckets:
+                self.buckets[bucket_name] = MockStorageBucket()
+            return self.buckets[bucket_name]
+    
+    class MockSupabaseClient:
+        
+        def __init__(self):
+            self.storage = MockStorage()
+    
+    svc = SupabaseArtifactService(
+        url="http://localhost:54321",
+        key="test-key",
+        bucket_name="test-bucket"
+    )
+    svc._client = MockSupabaseClient()
+    return svc
+
+
 def get_artifact_service(service_type: ArtifactServiceType, tmp_path):
     """Returns an artifact service instance based on type."""
     if service_type == ArtifactServiceType.S3:
@@ -180,13 +245,15 @@ def get_artifact_service(service_type: ArtifactServiceType, tmp_path):
         return LocalFolderArtifactService(base_path=tmp_path)
     if service_type == ArtifactServiceType.AZURE:
         return mock_azure_artifact_service()
+    if service_type == ArtifactServiceType.SUPABASE:
+        return mock_supabase_artifact_service()
     raise ValueError(f"Unsupported service type: {service_type}")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "service_type",
-    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE],
+    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE, ArtifactServiceType.SUPABASE],
 )
 async def test_load_empty(service_type, tmp_path):
     """Tests loading an artifact when none exists."""
@@ -202,7 +269,7 @@ async def test_load_empty(service_type, tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "service_type",
-    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE],
+    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE, ArtifactServiceType.SUPABASE],
 )
 async def test_save_load_delete(service_type, tmp_path):
     """Tests saving, loading, and deleting an artifact."""
@@ -247,7 +314,7 @@ async def test_save_load_delete(service_type, tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "service_type",
-    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE],
+    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE, ArtifactServiceType.SUPABASE],
 )
 async def test_list_keys(service_type, tmp_path):
     """Tests listing keys in the artifact service."""
@@ -279,7 +346,7 @@ async def test_list_keys(service_type, tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "service_type",
-    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE],
+    [ArtifactServiceType.S3, ArtifactServiceType.LOCAL, ArtifactServiceType.AZURE, ArtifactServiceType.SUPABASE],
 )
 async def test_list_versions(service_type, tmp_path):
     """Tests listing versions of an artifact."""
